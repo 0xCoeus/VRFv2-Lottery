@@ -5,26 +5,23 @@ pragma solidity ^0.8.7;
 import "@chainlink/contracts/src/v0.8/interfaces/LinkTokenInterface.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract VRFv2Consumer is VRFConsumerBaseV2 {
-  VRFCoordinatorV2Interface COORDINATOR;
-  LinkTokenInterface LINKTOKEN;
+contract LotteryVRFV2 is VRFConsumerBaseV2, Ownable {
+  VRFCoordinatorV2Interface private immutable COORDINATOR;
+  LinkTokenInterface private immutable LINKTOKEN;
 
   // Your subscription ID.
-  uint64 s_subscriptionId;
+  uint64 private subscriptionId;
 
-  // Rinkeby coordinator. For other networks,
-  // see https://docs.chain.link/docs/vrf-contracts/#configurations
-  address vrfCoordinator = 0x6168499c0cFfCaCD319c818142124B7A15E857ab;
+  // Rinkeby coordinator.
+  address private constant vrfCoordinator = 0x6168499c0cFfCaCD319c818142124B7A15E857ab;
 
-  // Rinkeby LINK token contract. For other networks,
-  // see https://docs.chain.link/docs/vrf-contracts/#configurations
-  address link = 0x01BE23585060835E02B77ef475b0Cc51aA1e0709;
+  // Rinkeby LINK token contract.
+  address private constant link = 0x01BE23585060835E02B77ef475b0Cc51aA1e0709;
 
   // The gas lane to use, which specifies the maximum gas price to bump to.
-  // For a list of available gas lanes on each network,
-  // see https://docs.chain.link/docs/vrf-contracts/#configurations
-  bytes32 keyHash = 0xd89b2bf150e3b9e13446986e571fb9cab24b13cea0a43ea20a6049a85cc807cc;
+  bytes32 private constant keyHash = 0xd89b2bf150e3b9e13446986e571fb9cab24b13cea0a43ea20a6049a85cc807cc;
 
   // Depends on the number of requested values that you want sent to the
   // fulfillRandomWords() function. Storing each word costs about 20,000 gas,
@@ -32,18 +29,16 @@ contract VRFv2Consumer is VRFConsumerBaseV2 {
   // this limit based on the network that you select, the size of the request,
   // and the processing of the callback request in the fulfillRandomWords()
   // function.
-  uint32 callbackGasLimit = 100000;
+  uint32 private constant callbackGasLimit = 100000;
 
   // The default is 3, but you can set this higher.
-  uint16 requestConfirmations = 3;
+  uint16 private constant requestConfirmations = 3;
 
-  // For this example, retrieve 2 random values in one request.
+  // For this example, retrieve 1 random values in one request.
   // Cannot exceed VRFCoordinatorV2.MAX_NUM_WORDS.
-  uint32 numWords =  1;
+  uint32  private constant numWords =  1;
 
-  uint256 public s_randomWords;
-  uint256 public s_requestId;
-  address s_owner;
+  uint256 private randNum;
 
   uint256 public constant minParticipants = 2;
   uint256 public constant maxParticipants = 10;
@@ -51,20 +46,18 @@ contract VRFv2Consumer is VRFConsumerBaseV2 {
   address payable[] public participants;
   address payable public lastWinner;
 
-  constructor(uint64 subscriptionId) VRFConsumerBaseV2(vrfCoordinator) {
+  constructor(uint64 _subscriptionId) VRFConsumerBaseV2(vrfCoordinator) {
     COORDINATOR = VRFCoordinatorV2Interface(vrfCoordinator);
     LINKTOKEN = LinkTokenInterface(link);
-    s_owner = msg.sender;
-    s_subscriptionId = subscriptionId;
+    subscriptionId = _subscriptionId;
   }
 
   // Assumes the subscription is funded sufficiently.
   function startLottery() external onlyOwner {
     // Will revert if subscription is not set and funded.
-    // Will revert if not enough participants
     require(participants.length >= minParticipants, "Need more participants to start lottery");
     
-    s_requestId = COORDINATOR.requestRandomWords(
+    COORDINATOR.requestRandomWords(
       keyHash,
       s_subscriptionId,
       requestConfirmations,
@@ -77,8 +70,8 @@ contract VRFv2Consumer is VRFConsumerBaseV2 {
     uint256, /* requestId */
     uint256[] memory randomWords
   ) internal override {
-    s_randomWords = randomWords[0];
-    uint256 winnerIndex = s_randomWords % participants.length;
+    randNum = randomWords[0];
+    uint256 winnerIndex = randNum % participants.length;
     lastWinner = participants[winnerIndex];
     lastWinner.transfer(address(this).balance);
     delete participants;
@@ -93,10 +86,5 @@ contract VRFv2Consumer is VRFConsumerBaseV2 {
   
   function getParticipantsCount() external view returns (uint) {
     return participants.length;
-  }
-
-  modifier onlyOwner() {
-    require(msg.sender == s_owner);
-    _;
   }
 }
